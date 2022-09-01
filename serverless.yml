@@ -1,0 +1,35 @@
+org: trogerstwilio
+app: taskrouter-wrapping-task-cleanup
+service: taskrouter-wrapping-task-cleanup
+useDotenv: true
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  logRetentionInDays: 7
+  environment:
+    ACCOUNT_SID: ${env:ACCOUNT_SID}
+    AUTH_TOKEN: ${env:AUTH_TOKEN}
+    TASKROUTER_WORKSPACE_SID: ${env:TASKROUTER_WORKSPACE_SID}
+    MAX_RESERVATION_WRAPPING_SECONDS: ${env:MAX_RESERVATION_WRAPPING_SECONDS}
+    MAX_RETRY_COUNT: ${env:MAX_RETRY_COUNT}
+    BACKOFF_TIMER_MILLISECONDS: ${env:BACKOFF_TIMER_MILLISECONDS}
+    EVENTS_DEFAULT_LOOKBACK_MINUTES: ${env:EVENTS_DEFAULT_LOOKBACK_MINUTES}
+    EVENTS_LOOKBACK_MAX_WRAPPING_MULTIPLE: ${env:EVENTS_LOOKBACK_MAX_WRAPPING_MULTIPLE}
+    MONITOR_ONLY: ${env:MONITOR_ONLY}
+
+functions:
+  rateHandler:
+    handler: handler.run
+    reservedConcurrency: 1
+    timeout: 300
+    events:
+      # Invoke Lambda function every minute
+      - schedule: rate(1 minute)
+  # cronHandler:
+  #   handler: handler.run
+  #   events:
+  #     # Invoke Lambda function every 2nd minute from Mon-Fri
+  #     - schedule: cron(0/2 * ? * MON-FRI *)
