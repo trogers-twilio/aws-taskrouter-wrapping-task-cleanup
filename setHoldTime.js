@@ -1,50 +1,27 @@
 const {
   BACKOFF_TIMER_MILLISECONDS,
   MAX_RETRY_COUNT,
-  ACCOUNT_SID,
-  API_KEY,
-  API_SECRET,
   TASKROUTER_WORKSPACE_SID,
   SYNC_SERVICE_SID
 } = process.env;
 
-const { SyncClient } = require('twilio-sync');
-const Twilio = require('twilio');
 const { sleep } = require('./utils');
 
-const setHoldTime = async (client, reservationSid, taskSid, timestamp, retryCount) => {
+const setHoldTime = async (client, reservationSid, taskSid, wrapupTimestamp, retryCount) => {
   let currentRetry = retryCount ? retryCount : 0;
 
   console.log('Checking hold time for reservation', reservationSid);
 
   try {
     // Check for hold time sync doc for this reservation
-    // First, generate an access token for Sync
-    const AccessToken = Twilio.jwt.AccessToken;
-    const SyncGrant = AccessToken.SyncGrant;
-    
-    const token = new AccessToken(
-      ACCOUNT_SID,
-      API_KEY,
-      API_SECRET
-    );
-    
-    token.identity = 'TaskWrapService';
-    
-    const syncGrant = new SyncGrant({
-      serviceSid: SYNC_SERVICE_SID || 'default'
-    });
-    
-    token.addGrant(syncGrant);
-    const tokenStr = token.toJwt();
-    
-    const syncClient = new SyncClient(tokenStr);
     const docName = `${reservationSid}_HoldTime`;
     let holdTime = 0;
     
     try {
       // Attempt to open the Sync doc
-      let doc = await syncClient.document({ id: docName, mode: 'open_existing' });
+      let doc = await client.sync.v1.services(SYNC_SERVICE_SID)
+        .documents(docName)
+        .fetch();
       let { data } = doc;
       
       if (!data.holdTime) {
@@ -56,7 +33,7 @@ const setHoldTime = async (client, reservationSid, taskSid, timestamp, retryCoun
       
       if (!isNaN(data.currentHoldStart) && data.currentHoldStart > 0) {
         // hold in progress, add to existing hold time
-        const currentHoldDuration = (timestamp - data.currentHoldStart) / 1000;
+        const currentHoldDuration = (wrapupTimestamp - data.currentHoldStart) / 1000;
         
         if (currentHoldDuration > 0) {
           holdTime = holdTime + currentHoldDuration;
@@ -70,6 +47,22 @@ const setHoldTime = async (client, reservationSid, taskSid, timestamp, retryCoun
         console.log(`No hold time doc found for reservation`, reservationSid);
       } else {
         console.error(`Error getting hold time doc for reservation ${reservationSid}`, error);
+        
+        currentRetry += 1;
+        
+        if (currentRetry < MAX_RETRY_COUNT) {
+          const backoffTimer = currentRetry * BACKOFF_TIMER_MILLISECONDS;
+          console.log(`Waiting for ${backoffTimer} milliseconds`);
+          await sleep(backoffTimer);
+        
+          console.log('Retrying, retry attempt', currentRetry);
+          await setHoldTime(client, reservationSid, taskSid, wrapupTimestamp, currentRetry);
+        } else {
+          console.log(`Max retry count (${MAX_RETRY_COUNT}) reached. Unable to get hold time.`);
+          throw error;
+        }
+        
+        return;
       }
     }
     
@@ -121,7 +114,7 @@ const setHoldTime = async (client, reservationSid, taskSid, timestamp, retryCoun
       await sleep(backoffTimer);
 
       console.log('Retrying, retry attempt', currentRetry);
-      await setHoldTime(client, reservationSid, taskSid, timestamp, currentRetry);
+      await setHoldTime(client, reservationSid, taskSid, wrapupTimestamp, currentRetry);
     } else {
       console.log(`Max retry count (${MAX_RETRY_COUNT}) reached. Unable to update hold time.`);
       throw error;
