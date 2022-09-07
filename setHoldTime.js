@@ -58,9 +58,10 @@ const setHoldTime = async (client, reservationSid, taskSid, timestamp, retryCoun
         // hold in progress, add to existing hold time
         const currentHoldDuration = (timestamp - data.currentHoldStart) / 1000;
         
-        holdTime = holdTime + currentHoldDuration;
-        
-        console.log(`Adding ${currentHoldDuration} seconds of outstanding hold time found for reservation`, reservationSid);
+        if (currentHoldDuration > 0) {
+          holdTime = holdTime + currentHoldDuration;
+          console.log(`Adding ${currentHoldDuration} seconds of outstanding hold time found for reservation`, reservationSid);
+        }
       }
       
     } catch (error) {
