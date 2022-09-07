@@ -49,7 +49,9 @@ const findLongWrappingReservations = async (client, lastRunTimeMs, currentMoment
         const formattedWrappingTime = moment.utc(wrappingTimeMs).format('HH:mm:ss');
         console.log(`Reservation ${wrapupEvent.resourceSid} has been in wrapup for ${formattedWrappingTime} (HH:mm:ss)`);
         longWrappingReservations.push({
+          timestamp: wrapupEvent.eventDateMs,
           reservationSid: wrapupEvent.resourceSid,
+          taskSid: wrapupEvent.eventData.task_sid,
           workerSid: wrapupEvent.eventData.worker_sid
         });
       }
