@@ -5,6 +5,7 @@ const {
   SYNC_SERVICE_SID
 } = process.env;
 
+const updateTaskAttributes = require('./updateTaskAttributes');
 const { sleep } = require('./utils');
 
 const setHoldTime = async (client, reservationSid, taskSid, wrapupTimestamp, retryCount) => {
@@ -66,42 +67,13 @@ const setHoldTime = async (client, reservationSid, taskSid, wrapupTimestamp, ret
       }
     }
     
-    // get attributes for the task, update if hold time differs
-    console.log('Checking conversations.hold_time task attribute for reservation', reservationSid);
-    const task = await client.taskrouter
-      .workspaces(TASKROUTER_WORKSPACE_SID)
-      .tasks(taskSid)
-      .fetch();
-    
-    let { attributes: attributesStr } = task;
-    let attributes = {};
-    
-    if (attributesStr) {
-      attributes = JSON.parse(attributesStr);
-    }
-    
-    if (!attributes.conversations || isNaN(attributes.conversations.hold_time) || attributes.conversations.hold_time !== holdTime) {
-      console.log(`Updating conversations.hold_time task attribute to ${holdTime} seconds on task ${taskSid} from reservation`, reservationSid);
-      
-      attributes = {
-        ...attributes,
-        conversations: {
-          ...attributes.conversations,
-          hold_time: holdTime
-        }
-      };
-      
-      await client.taskrouter
-        .workspaces(TASKROUTER_WORKSPACE_SID)
-        .tasks(taskSid)
-        .update({
-          attributes: JSON.stringify(attributes)
-        });
-      
-      console.log(`Completed updating conversations.hold_time task attribute from reservation`, reservationSid);
-    } else {
-      console.log('Task attribute conversations.hold_time already correct for reservation', reservationSid);
-    }
+    // update task attribute accordingly
+    const newAttributes = {
+      conversations: {
+        hold_time: holdTime
+      }
+    };
+    await updateTaskAttributes(reservationSid, taskSid, newAttributes);
     
   } catch (error) {
     console.error('Error updating hold time.', error);
